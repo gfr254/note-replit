@@ -128,7 +128,7 @@ globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
       `,
     },
-  });
+       });
 }
 
 buildAll().catch((err) => {
