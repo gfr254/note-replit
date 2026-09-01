@@ -1,55 +1,15 @@
-name: Weekly article publish
+name: Weekly article publish (disabled)
 
+# Weekly publishing is owned by the Replit API server. The server's
+# content scheduler polls the Replit development database and the publisher
+# runs in the same environment, so GitHub Actions must not attempt to use the
+# internal development database hostname.
 on:
-  schedule:
-    # 07:00 Asia/Tokyo = 22:00 UTC on Saturday.
-    - cron: "0 22 * * 6"
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: weekly-article-publish
-  cancel-in-progress: false
-
 jobs:
-  publish:
+  disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      NODE_ENV: production
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      AI_INTEGRATIONS_OPENAI_API_KEY: ${{ secrets.AI_INTEGRATIONS_OPENAI_API_KEY }}
-      AI_INTEGRATIONS_OPENAI_BASE_URL: ${{ secrets.AI_INTEGRATIONS_OPENAI_BASE_URL }}
-      HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
-      HATENA_BLOG_ID: ${{ secrets.HATENA_BLOG_ID }}
-      HATENA_USER_ID: ${{ secrets.HATENA_USER_ID }}
-      NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
-      NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Chromium
-        run: pnpm --filter @workspace/api-server exec playwright install --with-deps chromium
-
-      - name: Build API worker
-        run: pnpm --filter @workspace/api-server run build
-
-      - name: Run weekly publish
-        run: pnpm --filter @workspace/api-server run weekly-publish
+      - run: echo "Weekly publishing runs in the Replit API server."
