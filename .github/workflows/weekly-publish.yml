@@ -27,7 +27,6 @@ jobs:
       HATENA_USER_ID: ${{ secrets.HATENA_USER_ID }}
       NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
       NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

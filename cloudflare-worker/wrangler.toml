@@ -1,0 +1,7 @@
+name = "note-super-shadow-761"
+main = "worker.js"
+compatibility_date = "2026-08-31"
+
+[vars]
+# Set this to the public base URL of the Replit API, without /api/saveArticle.
+REPLIT_API_URL = "https://REPLACE_WITH_PUBLIC_REPLIT_API_URL"

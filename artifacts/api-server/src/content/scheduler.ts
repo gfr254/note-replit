@@ -14,12 +14,9 @@ const pollIntervalMs = Math.max(
   15_000,
   Number(process.env["CONTENT_SCHEDULER_POLL_INTERVAL_MS"] ?? 30_000),
 );
-
 const retryAfterMs = 10 * 60 * 1_000;
-
 const weeklyTopic =
   "空冷ビートルの歴史、維持、季節ごとの楽しみ方、部品選び、初心者向けの点検、オーナー同士の工夫を幅広く扱う";
-
 const signature = "空冷かずひろです。空冷ビートルを楽しみましょう。";
 
 function localParts(now: Date, timeZone: string) {
@@ -38,7 +35,6 @@ function localParts(now: Date, timeZone: string) {
       .filter((part) => part.type !== "literal")
       .map((part) => [part.type, part.value]),
   );
-
   return {
     weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
       parts.weekday,
@@ -51,19 +47,13 @@ function localParts(now: Date, timeZone: string) {
 
 function isDue(schedule: PublishSchedule, now: Date) {
   const local = localParts(now, schedule.timeZone);
-
-  if (local.weekday !== schedule.weekday) {
-    return null;
-  }
-
+  if (local.weekday !== schedule.weekday) return null;
   if (
     local.hour < schedule.publishHour ||
-    (local.hour === schedule.publishHour &&
-      local.minute < schedule.publishMinute)
+    (local.hour === schedule.publishHour && local.minute < schedule.publishMinute)
   ) {
     return null;
   }
-
   return local.date;
 }
 
@@ -80,9 +70,7 @@ async function ensureSchedules() {
       topic: weeklyTopic,
       signature,
     })
-    .onConflictDoNothing({
-      target: publishSchedulesTable.slug,
-    });
+    .onConflictDoNothing({ target: publishSchedulesTable.slug });
 }
 
 async function claimSchedule(
@@ -92,20 +80,14 @@ async function claimSchedule(
 ) {
   const [claimed] = await db
     .update(publishSchedulesTable)
-    .set({
-      lastAttemptAt: now,
-      updatedAt: now,
-    })
+    .set({ lastAttemptAt: now, updatedAt: now })
     .where(
       and(
         eq(publishSchedulesTable.id, schedule.id),
         eq(publishSchedulesTable.active, true),
         or(
           isNull(publishSchedulesTable.lastOccurrenceDate),
-          ne(
-            publishSchedulesTable.lastOccurrenceDate,
-            occurrenceDate,
-          ),
+          ne(publishSchedulesTable.lastOccurrenceDate, occurrenceDate),
         ),
         or(
           isNull(publishSchedulesTable.lastAttemptAt),
@@ -117,18 +99,13 @@ async function claimSchedule(
       ),
     )
     .returning();
-
   return claimed ?? null;
 }
 
 async function queueGeneratedArticle(
   schedule: PublishSchedule,
   occurrenceDate: string,
-  article: {
-    title: string;
-    body: string;
-    hashtags: string[];
-  },
+  article: { title: string; body: string; hashtags: string[] },
 ) {
   await db.transaction(async (tx) => {
     let [existingArticle] = await tx
@@ -152,20 +129,12 @@ async function queueGeneratedArticle(
     }
 
     const existingJobs = await tx
-      .select({
-        target: publishJobsTable.target,
-      })
+      .select({ target: publishJobsTable.target })
       .from(publishJobsTable)
       .where(eq(publishJobsTable.articleId, existingArticle.id));
+    const existingTargets = new Set(existingJobs.map((job) => job.target));
 
-    const existingTargets = new Set(
-      existingJobs.map((job) => job.target),
-    );
-
-    if (
-      existingArticle.status === "draft" ||
-      existingArticle.status === "failed"
-    ) {
+    if (existingArticle.status === "draft" || existingArticle.status === "failed") {
       await tx
         .update(articlesTable)
         .set({
@@ -177,10 +146,7 @@ async function queueGeneratedArticle(
     }
 
     for (const target of ["note", "hatena"] as const) {
-      if (existingTargets.has(target)) {
-        continue;
-      }
-
+      if (existingTargets.has(target)) continue;
       await tx.insert(publishJobsTable).values({
         articleId: existingArticle.id,
         target,
@@ -190,49 +156,25 @@ async function queueGeneratedArticle(
   });
 }
 
-async function processSchedule(
-  schedule: PublishSchedule,
-  now: Date,
-) {
+async function processSchedule(schedule: PublishSchedule, now: Date) {
   const occurrenceDate = isDue(schedule, now);
+  if (!occurrenceDate) return false;
 
-  if (!occurrenceDate) {
-    return false;
-  }
-
-  const claimed = await claimSchedule(
-    schedule,
-    occurrenceDate,
-    now,
-  );
-
-  if (!claimed) {
-    return false;
-  }
+  const claimed = await claimSchedule(schedule, occurrenceDate, now);
+  if (!claimed) return false;
 
   try {
     const sources = await collectTopics(schedule.topic);
-
     const article = await generateArticle({
       topic: schedule.topic,
       signature: schedule.signature,
       sources,
     });
-
-    await queueGeneratedArticle(
-      schedule,
-      occurrenceDate,
-      article,
-    );
-
+    await queueGeneratedArticle(schedule, occurrenceDate, article);
     await db
       .update(publishSchedulesTable)
-      .set({
-        lastOccurrenceDate: occurrenceDate,
-        updatedAt: new Date(),
-      })
+      .set({ lastOccurrenceDate: occurrenceDate, updatedAt: new Date() })
       .where(eq(publishSchedulesTable.id, schedule.id));
-
     logger.info(
       {
         schedule: schedule.slug,
@@ -241,73 +183,45 @@ async function processSchedule(
       },
       "Weekly article queued",
     );
-
     return true;
   } catch (error) {
     logger.error(
-      {
-        schedule: schedule.slug,
-        occurrenceDate,
-        err: error,
-      },
+      { schedule: schedule.slug, occurrenceDate, err: error },
       "Weekly article generation failed; will retry",
     );
-
     return false;
   }
 }
 
 export async function runContentSchedulerOnce() {
   await ensureSchedules();
-
   const schedules = await db
     .select()
     .from(publishSchedulesTable)
     .where(eq(publishSchedulesTable.active, true));
-
   let processed = false;
-
   for (const schedule of schedules) {
-    processed =
-      (await processSchedule(schedule, new Date())) || processed;
+    processed = (await processSchedule(schedule, new Date())) || processed;
   }
-
   return processed;
 }
 
 export function startContentScheduler() {
   let running = false;
-
   const tick = async () => {
-    if (running) {
-      return;
-    }
-
+    if (running) return;
     running = true;
-
     try {
       await runContentSchedulerOnce();
     } catch (error) {
-      logger.error(
-        { err: error },
-        "Content scheduler poll failed",
-      );
+      logger.error({ err: error }, "Content scheduler poll failed");
     } finally {
       running = false;
     }
   };
 
   void tick();
-
-  const timer = setInterval(
-    () => void tick(),
-    pollIntervalMs,
-  );
-
+  const timer = setInterval(() => void tick(), pollIntervalMs);
   timer.unref();
-
-  logger.info(
-    { pollIntervalMs },
-    "Content scheduler started",
-  );
+  logger.info({ pollIntervalMs }, "Content scheduler started");
 }
