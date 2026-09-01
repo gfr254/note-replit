@@ -33,11 +33,18 @@ async function clickFirst(page: Page, selectors: string[]) {
 async function login(page: Page, email: string, password: string) {
   const loginUrl = process.env["NOTE_LOGIN_URL"]?.trim() ?? "https://note.com/login";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+  await page
+    .locator('input[type="password"]')
+    .first()
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .catch(() => undefined);
 
   const emailField = await firstVisible(page, [
     'input[type="email"]',
     'input[name="email"]',
+    'input[name="login"]',
     'input[autocomplete="username"]',
+    'input[type="text"]',
   ]);
   if (!emailField) return;
 
@@ -53,6 +60,14 @@ async function login(page: Page, email: string, password: string) {
     'button[type="submit"]',
   ]);
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  await page.waitForTimeout(2_000);
+  if (new URL(page.url()).pathname === "/login") {
+    const alertText = (await page.locator('[role="alert"]').allTextContents())
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .join(" ");
+    throw new Error(`note login failed${alertText ? `: ${alertText}` : ""}`);
+  }
 }
 
 async function fillEditor(page: Page, body: string) {
@@ -100,6 +115,9 @@ export const publishToNote: Publisher = async ({ article }) => {
         'input[placeholder*="タイトル"]',
         'input[aria-label*="タイトル"]',
         'input[name="title"]',
+        'textarea[placeholder*="タイトル"]',
+        '[contenteditable="true"][data-placeholder*="タイトル"]',
+        '[contenteditable="true"][aria-label*="タイトル"]',
       ],
       article.title,
     );

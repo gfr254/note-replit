@@ -47,6 +47,8 @@ function localParts(now: Date, timeZone: string) {
 
 function isDue(schedule: PublishSchedule, now: Date) {
   const local = localParts(now, schedule.timeZone);
+  const forceRun = process.env["CONTENT_SCHEDULER_FORCE_RUN"] === "true";
+  if (forceRun) return local.date;
   if (local.weekday !== schedule.weekday) return null;
   if (
     local.hour < schedule.publishHour ||
